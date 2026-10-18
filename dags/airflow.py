@@ -12,7 +12,7 @@ from src.lab import load_data, data_preprocessing, build_save_model, load_model_
 
 # Define default arguments for your DAG
 default_args = {
-    'owner': 'Ramin Mohammadi',
+    'owner': 'Satyaa',
     'start_date': datetime(2026, 1, 15),
     'retries': 0,  # Number of retries in case of task failure
     'retry_delay': timedelta(minutes=5),  # Delay before retries
@@ -22,7 +22,7 @@ default_args = {
 with DAG(
     'Airflow_Lab1',
     default_args=default_args,
-    description='Dag example for Lab 1 of Airflow series',
+    description='Credit-card customer clustering with K-Means and the elbow method',
     catchup=False, 
 ) as dag:
 
