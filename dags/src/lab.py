@@ -6,6 +6,9 @@ import pickle
 import os
 import base64
 
+# The columns the model uses. Every other column in file.csv is ignored.
+FEATURES = ["BALANCE", "PURCHASES", "CREDIT_LIMIT"]
+
 def load_data():
     """
     Loads data from a CSV file, serializes it, and returns the serialized data.
@@ -26,8 +29,11 @@ def data_preprocessing(data_b64: str):
     data_bytes = base64.b64decode(data_b64)
     df = pickle.loads(data_bytes)
 
-    df = df.dropna()
-    clustering_data = df[["BALANCE", "PURCHASES", "CREDIT_LIMIT"]]
+    # Drop a row only if one of the columns the model uses is missing.
+    rows_before = len(df)
+    df = df.dropna(subset=FEATURES)
+    print(f"Rows before: {rows_before}, after dropping missing values: {len(df)}")
+    clustering_data = df[FEATURES]
 
     min_max_scaler = MinMaxScaler()
     clustering_data_minmax = min_max_scaler.fit_transform(clustering_data)
