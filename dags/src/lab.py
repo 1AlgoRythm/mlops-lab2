@@ -28,6 +28,58 @@ def select_k(sse):
     return int(knee.elbow)
 
 
+# A clustering run on fewer usable rows than this is not meaningful.
+MIN_ROWS = 100
+
+
+def validate_data(data_b64: str):
+    """
+    Checks the loaded table before the model sees it. Raises ValueError with a clear
+    message if a model column is missing or not numeric, if there are too few usable
+    rows, or if a model column has negative values.
+    Returns a small JSON-safe summary.
+    """
+    df = pickle.loads(base64.b64decode(data_b64))
+
+    missing = [c for c in FEATURES if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing columns: {missing}")
+
+    not_numeric = [c for c in FEATURES if not pd.api.types.is_numeric_dtype(df[c])]
+    if not_numeric:
+        raise ValueError(f"Columns that are not numeric: {not_numeric}")
+
+    usable = df.dropna(subset=FEATURES)
+    if len(usable) < MIN_ROWS:
+        raise ValueError(f"Only {len(usable)} usable rows; at least {MIN_ROWS} are needed")
+
+    negative = [c for c in FEATURES if (usable[c] < 0).any()]
+    if negative:
+        raise ValueError(f"Negative values in: {negative}")
+
+    summary = {
+        "rows": int(len(df)),
+        "usable_rows": int(len(usable)),
+        "ranges": {c: [float(usable[c].min()), float(usable[c].max())] for c in FEATURES},
+    }
+    print(f"Data check passed: {summary}")
+    return summary
+
+
+def find_out_of_range(scaler, rows):
+    """
+    Returns (row index, column, value, low, high) for every value in rows that lies
+    outside the range the scaler saw in training. An empty list means every value is inside.
+    """
+    problems = []
+    for j, column in enumerate(FEATURES):
+        low, high = float(scaler.data_min_[j]), float(scaler.data_max_[j])
+        for i, value in enumerate(rows[column]):
+            if value < low or value > high:
+                problems.append((i, column, float(value), low, high))
+    return problems
+
+
 def load_data():
     """
     Loads data from a CSV file, serializes it, and returns the serialized data.
@@ -115,6 +167,16 @@ def load_model_elbow(filename: str, sse: list, scaler_filename: str = "scaler.sa
     raw_row = pd.read_csv(os.path.join(os.path.dirname(__file__), "../data/test.csv"))[FEATURES]
     scaled_row = scaler.transform(raw_row)
     print(f"Scaled test row (inside the training range is 0 to 1): {scaled_row[0].round(4).tolist()}")
+
+    # Refuse a row outside the training range: the model would still answer, but the answer
+    # would be a guess far from anything it has seen.
+    problems = find_out_of_range(scaler, raw_row)
+    if problems:
+        details = "; ".join(
+            f"{column}={value} (training range {low} to {high})"
+            for _, column, value, low, high in problems
+        )
+        raise ValueError(f"Test row is outside the training range: {details}")
     pred = loaded_model.predict(scaled_row)[0]
 
     # ensure JSON-safe return
