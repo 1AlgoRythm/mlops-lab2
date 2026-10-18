@@ -13,6 +13,9 @@ FEATURES = ["BALANCE", "PURCHASES", "CREDIT_LIMIT"]
 K_MAX = 49
 KMEANS_KWARGS = {"init": "random", "n_init": 10, "max_iter": 300, "random_state": 42}
 
+# Folder that holds the saved model and the saved scaler.
+MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "model")
+
 
 def select_k(sse):
     """
@@ -36,10 +39,11 @@ def load_data():
     serialized_data = pickle.dumps(df)                    # bytes
     return base64.b64encode(serialized_data).decode("ascii")  # JSON-safe string
 
-def data_preprocessing(data_b64: str):
+def data_preprocessing(data_b64: str, scaler_filename: str = "scaler.sav"):
     """
     Deserializes base64-encoded pickled data, performs preprocessing,
     and returns base64-encoded pickled clustered data.
+    The fitted scaler is saved next to the model, so new rows can be scaled the same way.
     """
     # decode -> bytes -> DataFrame
     data_bytes = base64.b64decode(data_b64)
@@ -53,6 +57,10 @@ def data_preprocessing(data_b64: str):
 
     min_max_scaler = MinMaxScaler()
     clustering_data_minmax = min_max_scaler.fit_transform(clustering_data)
+
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    with open(os.path.join(MODEL_DIR, scaler_filename), "wb") as f:
+        pickle.dump(min_max_scaler, f)
 
     # bytes -> base64 string for XCom
     clustering_serialized_data = pickle.dumps(clustering_data_minmax)
@@ -77,23 +85,20 @@ def build_save_model(data_b64: str, filename: str):
     model = KMeans(n_clusters=best_k, **KMEANS_KWARGS).fit(df)
     print(f"Elbow k = {best_k}; saved model has {model.n_clusters} clusters")
 
-    output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "model")
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, filename)
-    with open(output_path, "wb") as f:
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    with open(os.path.join(MODEL_DIR, filename), "wb") as f:
         pickle.dump(model, f)
 
     return sse  # list is JSON-safe
 
 
-def load_model_elbow(filename: str, sse: list):
+def load_model_elbow(filename: str, sse: list, scaler_filename: str = "scaler.sav"):
     """
     Loads the saved model and uses the elbow method to report k.
     Returns the first prediction (as a plain int) for test.csv.
     """
     # load the saved model
-    output_path = os.path.join(os.path.dirname(__file__), "../model", filename)
-    loaded_model = pickle.load(open(output_path, "rb"))
+    loaded_model = pickle.load(open(os.path.join(MODEL_DIR, filename), "rb"))
 
     # the saved model must be the elbow model; stop the run if it is not
     best_k = select_k(sse)
@@ -104,9 +109,13 @@ def load_model_elbow(filename: str, sse: list):
             f"Saved model has {loaded_model.n_clusters} clusters but the elbow is {best_k}"
         )
 
-    # predict on raw test data (matches your original code)
-    df = pd.read_csv(os.path.join(os.path.dirname(__file__), "../data/test.csv"))
-    pred = loaded_model.predict(df)[0]
+    # The model learned from scaled data (0 to 1), so the test row must be scaled the
+    # same way. The original code predicted on the raw row.
+    scaler = pickle.load(open(os.path.join(MODEL_DIR, scaler_filename), "rb"))
+    raw_row = pd.read_csv(os.path.join(os.path.dirname(__file__), "../data/test.csv"))[FEATURES]
+    scaled_row = scaler.transform(raw_row)
+    print(f"Scaled test row (inside the training range is 0 to 1): {scaled_row[0].round(4).tolist()}")
+    pred = loaded_model.predict(scaled_row)[0]
 
     # ensure JSON-safe return
     try:
