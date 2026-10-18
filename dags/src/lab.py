@@ -16,7 +16,8 @@ FEATURES = ["BALANCE", "PURCHASES", "CREDIT_LIMIT"]
 K_MAX = 49
 KMEANS_KWARGS = {"init": "random", "n_init": 10, "max_iter": 300, "random_state": 42}
 
-# Folder that holds the saved model and the saved scaler.
+# Folders next to this package: the input CSV files, and the saved model and scaler.
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 MODEL_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "model")
 
 
@@ -90,7 +91,7 @@ def load_data():
         str: Base64-encoded serialized data (JSON-safe).
     """
     print("We are here")
-    df = pd.read_csv(os.path.join(os.path.dirname(__file__), "../data/file.csv"))
+    df = pd.read_csv(os.path.join(DATA_DIR, "file.csv"))
     serialized_data = pickle.dumps(df)                    # bytes
     return base64.b64encode(serialized_data).decode("ascii")  # JSON-safe string
 
@@ -191,7 +192,7 @@ def load_model_elbow(filename: str, sse: list, scaler_filename: str = "scaler.sa
     # The model learned from scaled data (0 to 1), so the test row must be scaled the
     # same way. The original code predicted on the raw row.
     scaler = pickle.load(open(os.path.join(MODEL_DIR, scaler_filename), "rb"))
-    raw_row = pd.read_csv(os.path.join(os.path.dirname(__file__), "../data/test.csv"))[FEATURES]
+    raw_row = pd.read_csv(os.path.join(DATA_DIR, "test.csv"))[FEATURES]
     scaled_row = scaler.transform(raw_row)
     print(f"Scaled test row (inside the training range is 0 to 1): {scaled_row[0].round(4).tolist()}")
 
