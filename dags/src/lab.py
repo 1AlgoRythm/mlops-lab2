@@ -1,10 +1,13 @@
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 from kneed import KneeLocator
 import pickle
 import os
 import base64
+import json
+from datetime import datetime, timezone
 
 # The columns the model uses. Every other column in file.csv is ignored.
 FEATURES = ["BALANCE", "PURCHASES", "CREDIT_LIMIT"]
@@ -119,6 +122,28 @@ def data_preprocessing(data_b64: str, scaler_filename: str = "scaler.sav"):
     return base64.b64encode(clustering_serialized_data).decode("ascii")
 
 
+def write_metrics(scaled_data, model, best_k):
+    """
+    Writes a metrics file for this run, named with the run's UTC time, and returns the metrics.
+    The silhouette score runs from -1 to 1; higher means the clusters are better separated.
+    It needs at least 2 clusters, so it is None when the elbow is k = 1.
+    """
+    now = datetime.now(timezone.utc)
+    metrics = {
+        "run_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "rows": int(len(scaled_data)),
+        "k": int(best_k),
+        "inertia": float(model.inertia_),
+        "silhouette": float(silhouette_score(scaled_data, model.labels_)) if best_k >= 2 else None,
+    }
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    path = os.path.join(MODEL_DIR, f"metrics_{now.strftime('%Y%m%dT%H%M%SZ')}.json")
+    with open(path, "w") as f:
+        json.dump(metrics, f, indent=2)
+    print(f"Metrics written to {os.path.basename(path)}: {metrics}")
+    return metrics
+
+
 def build_save_model(data_b64: str, filename: str):
     """
     Tries k = 1 .. K_MAX, picks the elbow k, refits K-Means at that k and saves it.
@@ -140,6 +165,8 @@ def build_save_model(data_b64: str, filename: str):
     os.makedirs(MODEL_DIR, exist_ok=True)
     with open(os.path.join(MODEL_DIR, filename), "wb") as f:
         pickle.dump(model, f)
+
+    write_metrics(df, model, best_k)
 
     return sse  # list is JSON-safe
 
