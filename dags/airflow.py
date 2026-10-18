@@ -14,8 +14,9 @@ from src.lab import load_data, validate_data, data_preprocessing, build_save_mod
 default_args = {
     'owner': 'Satyaa',
     'start_date': datetime(2026, 1, 15),
-    'retries': 0,  # Number of retries in case of task failure
-    'retry_delay': timedelta(minutes=5),  # Delay before retries
+    'retries': 2,  # A failed task is tried again up to 2 times
+    'retry_delay': timedelta(minutes=1),  # Wait 1 minute between tries
+    'execution_timeout': timedelta(minutes=10),  # Stop a task that runs longer than this
 }
 
 # Create a DAG instance named 'Airflow_Lab1' with the defined default arguments
@@ -23,7 +24,15 @@ with DAG(
     'Airflow_Lab1',
     default_args=default_args,
     description='Credit-card customer clustering with K-Means and the elbow method',
-    catchup=False, 
+    schedule='0 6 * * *',  # every day at 06:00 UTC (Airflow's default time zone here is UTC)
+    catchup=False,
+    max_active_runs=1,  # never run two clusterings at the same time
+    tags=['mlops', 'clustering'],
+    doc_md="""
+    Clusters credit-card customers with K-Means.
+    Steps: load the CSV, check it, scale 3 columns, pick k with the elbow method,
+    save the model, the scaler and a metrics file, then predict one test customer.
+    """,
 ) as dag:
 
     # Task to load data, calls the 'load_data' Python function
