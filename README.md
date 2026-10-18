@@ -85,8 +85,9 @@ Airflow 2.5.1 and 2.9.2, which do not match its own code.
 
 5. Open http://localhost:8080 and log in with username `airflow` and password `airflow`.
 
-The compose file installs `pandas`, `scikit-learn` and `kneed` when each container starts. No
-`.env` file is needed.
+The repository includes a one-line `.env` (`AIRFLOW_UID=50000`), because Apache's compose file
+needs a `.env` file and stops without one. The compose file installs `pandas`, `scikit-learn`
+and `kneed` when each container starts.
 
 ## Usage
 
@@ -98,7 +99,8 @@ docker compose exec airflow-scheduler airflow dags trigger Airflow_Lab1
 ```
 
 A new DAG starts paused. The DAG also runs every day at 06:00 UTC once it is unpaused. The web
-page shows times in your browser's time zone.
+page shows times in your browser's time zone. Unpausing starts one run at once, named like
+`scheduled__2026-10-18T06:00:00+00:00`, so your own trigger can be a second run.
 
 A run takes about 30 seconds. Open the last task, `load_model_task`, and read its log:
 
@@ -130,6 +132,7 @@ To stop Airflow, run `docker compose down`. To also delete the database, run
 ```
 .
 ├── .github/workflows/tests.yml   runs the tests on GitHub Actions
+├── .env                          AIRFLOW_UID=50000, needed by the compose file
 ├── .gitignore
 ├── dags/
 │   ├── airflow.py                the DAG: 5 tasks, schedule, retries
@@ -240,7 +243,14 @@ it does. Each change is one commit. "Observed" is what a real run or a check sho
 - **The compose file** ([`5988d69`](https://github.com/1AlgoRythm/mlops-lab2/commit/5988d69),
   [`f58e836`](https://github.com/1AlgoRythm/mlops-lab2/commit/f58e836)): it differs from Apache's
   3.3.2 file by two lines. Airflow's example DAGs are off, and the packages the DAG needs are
-  the default for `_PIP_ADDITIONAL_REQUIREMENTS`, so a fresh clone needs no `.env`.
+  the default for `_PIP_ADDITIONAL_REQUIREMENTS`. The message of `f58e836` says a fresh clone
+  needs no `.env`. That was wrong; see the next entry.
+- **A one-line `.env`**
+  ([`1442d00`](https://github.com/1AlgoRythm/mlops-lab2/commit/1442d00)). Apache's compose file
+  lists `.env` under `env_file`, so Docker Compose stops with `env file .env not found`
+  without it. Found by running the README steps on a fresh clone: both start commands failed
+  at once. The file holds `AIRFLOW_UID=50000`, the value the Airflow documentation gives for
+  systems other than Linux. It has no secret.
 
 ## Known Limitations
 
@@ -275,6 +285,8 @@ it does. Each change is one commit. "Observed" is what a real run or a check sho
 - A test that passes is only useful if it can fail. Breaking the code on purpose found a test
   that would not have caught a missing scaling step.
 - Compare floats with a tolerance. A scaled maximum came out as 1.0000000000000002.
+- Run the README on a fresh clone. A check that only resolves variables does not prove the
+  stack starts. The fresh clone showed that the compose file needs a `.env`.
 
 ## Attribution and AI Use
 
