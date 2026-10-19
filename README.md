@@ -4,8 +4,8 @@
 
 An Apache Airflow 3 pipeline that groups credit-card customers with K-Means. It loads a CSV,
 checks it, scales three columns, picks the number of clusters with the elbow method, saves the
-model and predicts the cluster of one test customer. It runs in Docker once a day, and 22
-tests check the code.
+model and predicts the cluster of one test customer. It also compares K-Means with a
+Gaussian mixture. It runs in Docker once a day, and 26 tests check the code.
 
 Based on `Labs/Airflow_Labs/Lab_1` from https://github.com/raminmohammadi/MLOps
 (MLOps, DADS 7305, Northeastern University).
@@ -30,17 +30,17 @@ Based on `Labs/Airflow_Labs/Lab_1` from https://github.com/raminmohammadi/MLOps
 The project has four parts:
 
 1. **`dags/airflow.py`**: the DAG (directed acyclic graph, Airflow's name for a workflow). It
-   has five tasks, a daily schedule and retries.
+   has six tasks, a daily schedule and retries.
 2. **`dags/src/lab.py`**: the Python function behind each task.
-3. **`tests/`**: 22 tests that run without Airflow or Docker.
+3. **`tests/`**: 26 tests that run without Airflow or Docker.
 4. **`docker-compose.yaml`** and **`.github/workflows/`**: the Airflow setup that runs the
    DAG, and the GitHub Actions workflow that runs the tests.
 
-The DAG is called `Airflow_Lab1`. Its five tasks run in a chain:
+The DAG is called `Airflow_Lab1`. Its six tasks run in a chain:
 
 ```mermaid
 flowchart LR
-    A[load_data_task] --> B[validate_data_task] --> C[data_preprocessing_task] --> D[build_save_model_task] --> E[load_model_task]
+    A[load_data_task] --> B[validate_data_task] --> C[data_preprocessing_task] --> D[build_save_model_task] --> E[load_model_task] --> F[compare_models_task]
 ```
 
 | Task | What it does |
@@ -50,6 +50,7 @@ flowchart LR
 | `data_preprocessing_task` | Drops rows that miss a model column, scales the 3 columns to 0 to 1 and saves the scaler. |
 | `build_save_model_task` | Fits K-Means for k = 1 to 49, picks the elbow, refits at that k, saves the model and a metrics file. |
 | `load_model_task` | Checks the saved model is the elbow model, scales the test customer, refuses a customer outside the training range and predicts the cluster. |
+| `compare_models_task` | Fits a Gaussian mixture with the same k, compares it with K-Means by silhouette score and writes a comparison file. It runs last and changes nothing else. |
 
 The model uses three columns: `BALANCE`, `PURCHASES` and `CREDIT_LIMIT`. The other 15 columns
 are ignored.
@@ -99,7 +100,7 @@ Unpausing starts one run at once, named like `scheduled__2026-10-18T06:00:00+00:
 manual trigger can be a second run. After that the DAG runs every day at 06:00 UTC. The web
 page shows times in the browser's time zone.
 
-A run takes about 30 seconds. Open the last task, `load_model_task`, and read its log:
+A run takes about 35 seconds. Open the last task, `load_model_task`, and read its log:
 
 ```text
 Optimal no. of clusters: 8
@@ -107,13 +108,14 @@ Saved model has 8 clusters
 Scaled test row (inside the training range is 0 to 1): [0.1682, 0.0, 0.2321]
 ```
 
-A run writes three kinds of file into `dags/model/`. Git ignores them.
+A run writes four kinds of file into `dags/model/`. Git ignores them.
 
 | File | Content |
 |---|---|
 | `model.sav` | The K-Means model fitted at the elbow k |
 | `scaler.sav` | The scaler fitted on the training data |
 | `metrics_TIME.json` | One file per run: time, rows, k, inertia and silhouette score |
+| `model_comparison_TIME.json` | One file per run: K-Means against the Gaussian mixture, with the silhouette score of each |
 
 To check the saved model without trusting the log:
 
@@ -128,7 +130,7 @@ mlops-lab2/
 ├── .github/workflows/
 │   └── tests.yml              # "Tests": runs pytest on Python 3.12 and 3.13
 ├── dags/
-│   ├── airflow.py             # the DAG: 5 tasks, schedule, retries
+│   ├── airflow.py             # the DAG: 6 tasks, schedule, retries
 │   ├── data/
 │   │   ├── file.csv           # 8,950 customers, 18 columns
 │   │   └── test.csv           # one customer to predict
@@ -137,7 +139,7 @@ mlops-lab2/
 │       ├── __init__.py
 │       └── lab.py             # the function behind each task
 ├── tests/
-│   └── test_lab.py            # 22 tests
+│   └── test_lab.py            # 26 tests
 ├── .env                       # AIRFLOW_UID=50000, needed by the compose file
 ├── .gitignore
 ├── docker-compose.yaml        # Apache's Airflow 3.3.2 file, 2 lines changed
@@ -225,6 +227,27 @@ Load the saved model and return the cluster of the customer in `data/test.csv` a
 Raise `ValueError` if the model does not have the elbow number of clusters, or if the customer
 is outside the training range. The customer is scaled with the saved scaler first.
 
+### `silhouette_or_none(scaled_data, labels)`
+
+Return the silhouette score of a labelling, or `None` when it is undefined. The score needs at
+least 2 different labels and fewer labels than rows.
+
+```python
+>>> import numpy as np
+>>> points = np.array([[0.0], [0.1], [1.0], [1.1]])
+>>> round(lab.silhouette_or_none(points, [0, 0, 1, 1]), 4)
+0.8997
+>>> lab.silhouette_or_none(points, [0, 0, 0, 0]) is None
+True
+```
+
+### `compare_models(data_b64, sse)`
+
+Fit a Gaussian mixture (a model that gives each point a probability for every cluster) with the
+elbow k from `sse`, and compare it with K-Means on the same scaled data. Write
+`model/model_comparison_TIME.json` with both silhouette scores and the better model, and return
+the same values. K-Means stays the model that is saved and used.
+
 ## Continuous Integration
 
 ### How it works
@@ -276,7 +299,7 @@ pytest
 
 | File | Tests | Original lab |
 |---|---|---|
-| `tests/test_lab.py` | 22 | 0 |
+| `tests/test_lab.py` | 26 | 0 |
 
 The tests cover these kinds of cases:
 
@@ -291,6 +314,8 @@ The tests cover these kinds of cases:
   tolerance, not `==`.
 - **Real data:** the real `file.csv` passes the check, and the real `test.csv` is inside its
   range.
+- **Model comparison:** the comparison file is written and JSON-safe, it uses the elbow k, it
+  names the better model by silhouette score, and the score is `None` when it is undefined.
 
 To check that the tests can fail, they were run against six deliberately broken copies of
 `lab.py`, each undoing one change below. Five were caught at once. Not scaling the test row was
@@ -345,6 +370,11 @@ Each change is its own commit.
   ([`b93d086`](https://github.com/1AlgoRythm/mlops-lab2/commit/b93d086)).
 - **A GitHub Actions workflow** that runs the tests on Python 3.12 and 3.13
   ([`36ade5f`](https://github.com/1AlgoRythm/mlops-lab2/commit/36ade5f)).
+- **A second model for comparison.** A new last task, `compare_models_task`, fits a Gaussian
+  mixture with the elbow k and compares it with K-Means by silhouette score. On this data
+  K-Means scores 0.4015 and the mixture scores -0.0179, so K-Means stays the saved model. A
+  comparison file is written for every run, and 4 more tests bring the total to 26
+  ([`89ff84e`](https://github.com/1AlgoRythm/mlops-lab2/commit/89ff84e)).
 
 ### Changed
 
@@ -385,6 +415,9 @@ Each change is its own commit.
   design. It works for 8,950 rows. A larger table needs files, not XCom.
 - **The test customer is part of the training data.** It checks that the pipeline works. It
   does not measure how well the model predicts.
+- **The comparison is advisory.** The Gaussian mixture never replaces K-Means, and the
+  silhouette score is one measure of cluster quality. It does not say which model suits a
+  real use.
 - **GitHub Actions has not been run on this code at the time of writing.** The commands in the
   workflow were run in a fresh environment and passed. Check the badge at the top.
 
@@ -397,6 +430,8 @@ Each change is its own commit.
 - A test that passes is only useful if it can fail. Breaking the code on purpose found a test
   that would not have caught a missing scaling step.
 - Compare floats with a tolerance. A scaled maximum came out as 1.0000000000000002.
+- A different model is not automatically better. The Gaussian mixture scored -0.0179 against
+  0.4015 for K-Means on the same data.
 - Run the README on a fresh clone. A check that only resolves variables does not prove the
   stack starts. The fresh clone showed that the compose file needs a `.env`.
 
