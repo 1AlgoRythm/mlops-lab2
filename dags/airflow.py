@@ -3,7 +3,10 @@ from airflow import DAG
 # from airflow.operators.python import PythonOperator
 from airflow.providers.standard.operators.python import PythonOperator
 from datetime import datetime, timedelta
-from src.lab import load_data, validate_data, data_preprocessing, build_save_model, load_model_elbow
+from src.lab import (
+    load_data, validate_data, data_preprocessing, build_save_model, load_model_elbow,
+    compare_models,
+)
 
 # NOTE:
 # In Airflow 3.x, enabling XCom pickling should be done via environment variable:
@@ -70,8 +73,16 @@ with DAG(
         op_args=["model.sav", build_save_model_task.output],
     )
 
+    # Task to compare K-Means with a second model, a Gaussian mixture. It runs last, so a
+    # problem here can never stop the saved model or the prediction.
+    compare_models_task = PythonOperator(
+        task_id='compare_models_task',
+        python_callable=compare_models,
+        op_args=[data_preprocessing_task.output, build_save_model_task.output],
+    )
+
     # Set task dependencies
-    load_data_task >> validate_data_task >> data_preprocessing_task >> build_save_model_task >> load_model_task
+    load_data_task >> validate_data_task >> data_preprocessing_task >> build_save_model_task >> load_model_task >> compare_models_task
 
 # If this script is run directly, allow command-line interaction with the DAG
 if __name__ == "__main__":

@@ -233,6 +233,44 @@ def test_load_model_elbow_stops_when_the_saved_model_is_not_the_elbow_model(work
         lab.load_model_elbow("model.sav", sse)
 
 
+# ---- compare_models ------------------------------------------------------------------------
+
+def test_silhouette_or_none_is_none_when_it_is_undefined():
+    points = np.array([[0.0], [0.1], [1.0], [1.1]])
+    assert lab.silhouette_or_none(points, [0, 0, 0, 0]) is None  # one label only
+    assert lab.silhouette_or_none(points, [0, 1, 2, 3]) is None  # one label per row
+    # two clean groups: by hand, the mean of 0.9048 and 0.8947 is 0.8997
+    assert lab.silhouette_or_none(points, [0, 0, 1, 1]) == pytest.approx(0.8997, abs=1e-3)
+
+
+def test_compare_models_writes_a_comparison_file(workdir):
+    scaled, sse = fit_pipeline(make_table())
+    result = lab.compare_models(scaled, sse)
+    assert set(result) == {
+        "run_utc", "rows", "k", "kmeans_silhouette", "gaussian_mixture_silhouette",
+        "gaussian_mixture_converged", "better_by_silhouette",
+    }
+    assert result["k"] == 3 and result["rows"] == 180
+    assert result["kmeans_silhouette"] > 0.5  # three clean groups
+    json.dumps(result)  # the result goes through XCom, so it must be JSON-safe
+    files = glob.glob(str(workdir / "model" / "model_comparison_*.json"))
+    assert len(files) == 1
+    assert json.load(open(files[0])) == result
+
+
+def test_compare_models_names_the_better_model_by_silhouette(workdir):
+    scaled, sse = fit_pipeline(make_table())
+    result = lab.compare_models(scaled, sse)
+    kmeans, mixture = result["kmeans_silhouette"], result["gaussian_mixture_silhouette"]
+    assert result["better_by_silhouette"] == ("kmeans" if kmeans >= mixture else "gaussian_mixture")
+
+
+def test_compare_models_uses_the_elbow_k_of_the_sse_list(workdir):
+    scaled, _ = fit_pipeline(make_table())
+    bend_at_four = [100, 50, 25, 12.5, 12, 11.8, 11.6, 11.5, 11.4, 11.3]
+    assert lab.compare_models(scaled, bend_at_four)["k"] == 4
+
+
 # ---- the real lab data ---------------------------------------------------------------------
 
 def test_the_real_data_passes_the_check_and_the_real_test_row_is_in_range():

@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
 from sklearn.metrics import silhouette_score
 from kneed import KneeLocator
 import pickle
@@ -213,3 +214,52 @@ def load_model_elbow(filename: str, sse: list, scaler_filename: str = "scaler.sa
     except Exception:
         # if not numeric, still return a JSON-friendly version
         return pred.item() if hasattr(pred, "item") else pred
+
+
+def silhouette_or_none(scaled_data, labels):
+    """
+    Returns the silhouette score of a labelling, or None when it is undefined: the score
+    needs at least 2 different labels and fewer labels than rows.
+    """
+    n_labels = len(set(labels))
+    if n_labels < 2 or n_labels >= len(scaled_data):
+        return None
+    return float(silhouette_score(scaled_data, labels))
+
+
+def compare_models(data_b64: str, sse: list):
+    """
+    Fits a second model, a Gaussian mixture, with the elbow k and compares it with K-Means
+    on the same scaled data. The comparison is written to model/model_comparison_TIME.json.
+    It changes nothing else: K-Means stays the saved and used model.
+    Returns the comparison (JSON-safe).
+    """
+    scaled = pickle.loads(base64.b64decode(data_b64))
+    k = select_k(sse)
+
+    kmeans = KMeans(n_clusters=k, **KMEANS_KWARGS).fit(scaled)
+    mixture = GaussianMixture(n_components=k, random_state=42).fit(scaled)
+    kmeans_score = silhouette_or_none(scaled, kmeans.labels_)
+    mixture_score = silhouette_or_none(scaled, mixture.predict(scaled))
+
+    if kmeans_score is None or mixture_score is None:
+        better = None
+    else:
+        better = "kmeans" if kmeans_score >= mixture_score else "gaussian_mixture"
+
+    now = datetime.now(timezone.utc)
+    comparison = {
+        "run_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "rows": int(len(scaled)),
+        "k": int(k),
+        "kmeans_silhouette": kmeans_score,
+        "gaussian_mixture_silhouette": mixture_score,
+        "gaussian_mixture_converged": bool(mixture.converged_),
+        "better_by_silhouette": better,
+    }
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    path = os.path.join(MODEL_DIR, f"model_comparison_{now.strftime('%Y%m%dT%H%M%SZ')}.json")
+    with open(path, "w") as f:
+        json.dump(comparison, f, indent=2)
+    print(f"Model comparison written to {os.path.basename(path)}: {comparison}")
+    return comparison
