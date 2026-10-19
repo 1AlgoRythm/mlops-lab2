@@ -4,8 +4,8 @@
 
 An Apache Airflow 3 pipeline that groups credit-card customers with K-Means. It loads a CSV,
 checks it, scales three columns, picks the number of clusters with the elbow method, saves the
-model and predicts the cluster of one test customer. It runs in Docker once a day, and 26
-tests check the code.
+model and predicts the cluster of one test customer. It runs in Docker, and 26 tests
+check the code.
 
 Based on `Labs/Airflow_Labs/Lab_1` from https://github.com/raminmohammadi/MLOps
 (MLOps, DADS 7305, Northeastern University).
@@ -29,8 +29,8 @@ Based on `Labs/Airflow_Labs/Lab_1` from https://github.com/raminmohammadi/MLOps
 
 The project has four parts:
 
-1. **`dags/airflow.py`**: the DAG (Airflow's name for a workflow). It has six tasks, a daily
-   schedule and retries.
+1. **`dags/airflow.py`**: the DAG (Airflow's name for a workflow). It has six tasks, retries and a
+   time limit.
 2. **`dags/src/lab.py`**: the Python function behind each task.
 3. **`tests/`**: 26 tests that run without Airflow or Docker.
 4. **`docker-compose.yaml`** and **`.github/workflows/`**: the Airflow setup, and the GitHub
@@ -77,8 +77,8 @@ docker compose exec airflow-scheduler airflow dags trigger Airflow_Lab1   # star
 docker compose down                                                       # stop Airflow
 ```
 
-Unpausing starts one run at once. After that the DAG runs every day at 06:00 UTC. A run takes
-about 35 seconds. Open the log of `load_model_task` to see the result:
+The DAG has no schedule, so it runs only when triggered. A run takes about 35 seconds. Open
+the log of `load_model_task` to see the result:
 
 ```text
 Optimal no. of clusters: 8
@@ -96,7 +96,7 @@ mlops-lab2/
 ├── .github/workflows/
 │   └── tests.yml              # "Tests": runs pytest on Python 3.12 and 3.13
 ├── dags/
-│   ├── airflow.py             # the DAG: 6 tasks, schedule, retries
+│   ├── airflow.py             # the DAG: 6 tasks, retries
 │   ├── data/
 │   │   ├── file.csv           # 8,950 customers, 18 columns
 │   │   └── test.csv           # one customer to predict
@@ -254,8 +254,7 @@ Each change is its own commit.
   score. On this data K-Means scores 0.4015 and the mixture scores -0.0179, so K-Means stays
   the saved model.
 - **Tests:** 22 tests and a `requirements.txt`, and 4 more with the model comparison.
-- **A daily schedule, retries and a time limit:** daily at 06:00 UTC, 2 retries one minute apart,
-  and 10 minutes per task.
+- **Retries and a time limit:** 2 retries one minute apart, and 10 minutes per task.
 - **A GitHub Actions workflow** that runs the tests on Python 3.12 and 3.13.
 
 ### Changed

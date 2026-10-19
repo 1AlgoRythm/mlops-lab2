@@ -27,7 +27,6 @@ with DAG(
     'Airflow_Lab1',
     default_args=default_args,
     description='Credit-card customer clustering with K-Means and the elbow method',
-    schedule='0 6 * * *',  # every day at 06:00 UTC (Airflow's default time zone here is UTC)
     catchup=False,
     max_active_runs=1,  # never run two clusterings at the same time
     tags=['mlops', 'clustering'],
