@@ -403,7 +403,8 @@ Each change is its own commit.
 ## Attribution and AI Use
 
 This repository is based on the lab in the course repository linked at the top. Claude (an
-AI assistant) was used to draft the workflow.
+AI assistant) was used to draft the workflow. The code was run, and the results were checked
+in the Airflow web pages and in the logs.
 
 ---
 
