@@ -282,11 +282,18 @@ Each change is its own commit.
 
 ## Lessons Learned
 
+- A DAG is a chain of tasks, and a failing task stops the tasks after it. Put a check first: a
+  bad file stopped the run at `validate_data_task`, and the other tasks never started.
+- Retries help with temporary errors, not with bad data. The check task has no retries, and a
+  failing `load_model_task` ran 3 times (the first try and 2 retries).
+- Tasks pass their results to the next task (Airflow calls this XCom), so a result must be
+  JSON-safe. The lab sends the table as text, which only suits small data.
+- Airflow reads the DAG files again every so often. In this setup a change took about 30
+  seconds to show in the web page.
+- A schedule only runs while Airflow is running and the DAG is unpaused. It added nothing here,
+  so it was removed.
 - A log line is not proof. The lab printed "optimal 8" while the saved model had 49 clusters.
-- A model must see new data the way it saw training data. Save the scaler with the model.
-- A pipeline should refuse bad input with a clear message, not answer with a guess.
-- A test that passes is only useful if it can fail.
-- Run the README on a fresh clone. It showed that the compose file needs a `.env`.
+- Run the README on a fresh clone. It showed that Airflow's compose file needs a `.env`.
 
 ## Attribution and AI Use
 
