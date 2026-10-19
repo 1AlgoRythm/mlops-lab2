@@ -23,6 +23,7 @@ Based on `Labs/Airflow_Labs/Lab_1` from https://github.com/raminmohammadi/MLOps
 - [Changes From the Upstream Lab](#changes-from-the-upstream-lab)
 - [Known Limitations](#known-limitations)
 - [Lessons Learned](#lessons-learned)
+- [Attribution and AI Use](#attribution-and-ai-use)
 
 ## Overview
 
@@ -398,6 +399,13 @@ Each change is its own commit.
 - Compare floats with a tolerance. A scaled maximum came out as 1.0000000000000002.
 - Run the README on a fresh clone. A check that only resolves variables does not prove the
   stack starts. The fresh clone showed that the compose file needs a `.env`.
+
+## Attribution and AI Use
+
+This repository is based on the lab in the course repository linked at the top. Claude (an
+AI assistant) was used to explain concepts, help read failed runs, and write and draft the
+code changes, the tests, the workflow and this README. The code was run locally, and the
+results were checked in the Airflow web page and in the logs.
 
 ---
 
