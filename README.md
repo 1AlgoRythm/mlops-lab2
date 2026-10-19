@@ -4,8 +4,8 @@
 
 An Apache Airflow 3 pipeline that groups credit-card customers with K-Means. It loads a CSV,
 checks it, scales three columns, picks the number of clusters with the elbow method, saves the
-model and predicts the cluster of one test customer. It also compares K-Means with a
-Gaussian mixture. It runs in Docker once a day, and 26 tests check the code.
+model and predicts the cluster of one test customer. It runs in Docker once a day, and 26
+tests check the code.
 
 Based on `Labs/Airflow_Labs/Lab_1` from https://github.com/raminmohammadi/MLOps
 (MLOps, DADS 7305, Northeastern University).
@@ -29,42 +29,31 @@ Based on `Labs/Airflow_Labs/Lab_1` from https://github.com/raminmohammadi/MLOps
 
 The project has four parts:
 
-1. **`dags/airflow.py`**: the DAG (directed acyclic graph, Airflow's name for a workflow). It
-   has six tasks, a daily schedule and retries.
+1. **`dags/airflow.py`**: the DAG (Airflow's name for a workflow). It has six tasks, a daily
+   schedule and retries.
 2. **`dags/src/lab.py`**: the Python function behind each task.
 3. **`tests/`**: 26 tests that run without Airflow or Docker.
-4. **`docker-compose.yaml`** and **`.github/workflows/`**: the Airflow setup that runs the
-   DAG, and the GitHub Actions workflow that runs the tests.
+4. **`docker-compose.yaml`** and **`.github/workflows/`**: the Airflow setup, and the GitHub
+   Actions workflow that runs the tests.
 
-The DAG is called `Airflow_Lab1`. Its six tasks run in a chain:
+The six tasks run in this order:
 
-```mermaid
-flowchart LR
-    A[load_data_task] --> B[validate_data_task] --> C[data_preprocessing_task] --> D[build_save_model_task] --> E[load_model_task] --> F[compare_models_task]
-```
+1. `load_data_task`: reads `dags/data/file.csv` (8,950 customers, 18 columns).
+2. `validate_data_task`: stops the run if the data is bad.
+3. `data_preprocessing_task`: scales 3 columns to 0 to 1 and saves the scaler.
+4. `build_save_model_task`: fits K-Means, picks k with the elbow method and saves the model.
+5. `load_model_task`: predicts the cluster of one test customer.
+6. `compare_models_task`: compares K-Means with a Gaussian mixture.
 
-| Task | What it does |
-|---|---|
-| `load_data_task` | Reads `dags/data/file.csv`: 8,950 customers and 18 columns. |
-| `validate_data_task` | Stops the run if a model column is missing, not numeric or negative, or if fewer than 100 rows are usable. |
-| `data_preprocessing_task` | Drops rows that miss a model column, scales the 3 columns to 0 to 1 and saves the scaler. |
-| `build_save_model_task` | Fits K-Means for k = 1 to 49, picks the elbow, refits at that k, saves the model and a metrics file. |
-| `load_model_task` | Checks the saved model is the elbow model, scales the test customer, refuses a customer outside the training range and predicts the cluster. |
-| `compare_models_task` | Fits a Gaussian mixture with the same k, compares it with K-Means by silhouette score and writes a comparison file. It runs last and changes nothing else. |
-
-The model uses three columns: `BALANCE`, `PURCHASES` and `CREDIT_LIMIT`. The other 15 columns
-are ignored.
+The model uses three columns: `BALANCE`, `PURCHASES` and `CREDIT_LIMIT`.
 
 ## Requirements
 
-- Docker with Compose 2.14.0 or newer (the Airflow documentation's minimum)
-- At least 4 GB of memory for Docker (the documentation recommends 8 GB)
+- Docker with Compose 2.14.0 or newer, and at least 4 GB of memory for Docker
 - Tested with Docker 29.8.0 and Docker Compose v5.5.1
 - Python 3.12 or 3.13 to run the tests outside Docker
 
-The Airflow image is `apache/airflow:3.3.2`, which runs Python 3.13. The lab needs Airflow 3,
-because the DAG imports `airflow.providers.standard`. The upstream lab text names Airflow
-2.5.1 and 2.9.2, which do not match its own code.
+The Airflow image is `apache/airflow:3.3.2`. The DAG needs Airflow 3.
 
 ## Installation
 
@@ -76,31 +65,20 @@ docker compose up airflow-init
 docker compose up -d
 ```
 
-`airflow-init` sets up the database and the first user. Wait for `airflow-init exited with
-code 0` before the last command. Then open http://localhost:8080 and log in with username
-`airflow` and password `airflow`.
-
-The `mkdir` line matters: if the folders are missing, Docker creates them owned by root. The
-repository includes a one-line `.env` (`AIRFLOW_UID=50000`), because Apache's compose file
-needs a `.env` file and stops without one. The compose file installs `pandas`,
-`scikit-learn` and `kneed` when each container starts.
+Wait for `airflow-init exited with code 0` before the last command. Then open
+http://localhost:8080 and log in with username `airflow` and password `airflow`. The repository
+includes a one-line `.env` (`AIRFLOW_UID=50000`), which the compose file needs.
 
 ## Usage
-
-Start a run from the web page (open `Airflow_Lab1`, then **Trigger**) or from the terminal:
 
 ```bash
 docker compose exec airflow-scheduler airflow dags unpause Airflow_Lab1   # a new DAG starts paused
 docker compose exec airflow-scheduler airflow dags trigger Airflow_Lab1   # start a run now
 docker compose down                                                       # stop Airflow
-docker compose down --volumes                                             # stop and delete the database
 ```
 
-Unpausing starts one run at once, named like `scheduled__2026-10-18T06:00:00+00:00`, so a
-manual trigger can be a second run. After that the DAG runs every day at 06:00 UTC. The web
-page shows times in the browser's time zone.
-
-A run takes about 35 seconds. Open the last task, `load_model_task`, and read its log:
+Unpausing starts one run at once. After that the DAG runs every day at 06:00 UTC. A run takes
+about 35 seconds. Open the log of `load_model_task` to see the result:
 
 ```text
 Optimal no. of clusters: 8
@@ -108,20 +86,8 @@ Saved model has 8 clusters
 Scaled test row (inside the training range is 0 to 1): [0.1682, 0.0, 0.2321]
 ```
 
-A run writes four kinds of file into `dags/model/`. Git ignores them.
-
-| File | Content |
-|---|---|
-| `model.sav` | The K-Means model fitted at the elbow k |
-| `scaler.sav` | The scaler fitted on the training data |
-| `metrics_TIME.json` | One file per run: time, rows, k, inertia and silhouette score |
-| `model_comparison_TIME.json` | One file per run: K-Means against the Gaussian mixture, with the silhouette score of each |
-
-To check the saved model without trusting the log:
-
-```bash
-docker compose exec airflow-worker python -c "import pickle; m=pickle.load(open('/opt/airflow/dags/model/model.sav','rb')); print(m.n_clusters)"
-```
+A run writes the model, the scaler and two JSON files (the metrics and the model comparison)
+into `dags/model/`. Git ignores them.
 
 ## Project Structure
 
@@ -150,40 +116,29 @@ mlops-lab2/
 
 ## API Reference
 
-All functions live in `dags/src/lab.py`. Run the examples from the `dags/` folder. A task
-passes a table to the next task as base64 text, because the lab's own comment says a task
-result must be JSON-safe.
+The main functions live in `dags/src/lab.py`. Run the examples from the `dags/` folder.
 
 ### `load_data()`
 
-Read `data/file.csv` and return it as base64 text (a pickled table).
+Read `data/file.csv` and return it as base64 text.
 
 ### `validate_data(data_b64)`
 
-Check the table from `load_data`. Raise `ValueError` if a model column is missing or not
-numeric, if fewer than 100 rows are usable, or if a model column has negative values. Return a
-summary with the row counts and the range of each model column.
-
-```python
->>> from src import lab
->>> data = lab.load_data()
-We are here
->>> lab.validate_data(data)["usable_rows"]
-Data check passed: {'rows': 8950, 'usable_rows': 8949, 'ranges': {'BALANCE': [0.0, 19043.13856], 'PURCHASES': [0.0, 49039.57], 'CREDIT_LIMIT': [50.0, 30000.0]}}
-8949
-```
+Raise `ValueError` if a model column is missing, not numeric or negative, or if fewer than 100
+rows are usable. Return a summary of the rows.
 
 ### `data_preprocessing(data_b64, scaler_filename="scaler.sav")`
 
-Drop rows that miss a model column and scale the 3 model columns to 0 to 1. Save the scaler
-in `model/` and return the scaled data as base64 text.
+Drop rows that miss a model column, scale the 3 columns to 0 to 1, save the scaler and return
+the scaled data.
 
 ### `select_k(sse)`
 
-Return the elbow k for a list of SSE values, where `sse[0]` is k = 1. Raise `ValueError` if the
-curve has no elbow.
+Return the elbow k for a list of SSE values, where `sse[0]` is k = 1. Raise `ValueError` if
+there is no elbow.
 
 ```python
+>>> from src import lab
 >>> lab.select_k([100, 50, 25, 12.5, 12, 11.8, 11.6, 11.5, 11.4, 11.3])
 4
 >>> lab.select_k([5.0] * 10)
@@ -194,28 +149,19 @@ ValueError: No elbow found in the SSE curve
 
 ### `build_save_model(data_b64, filename)`
 
-Fit K-Means for k = 1 to 49 and pick the elbow with `select_k`. Refit at that k, save the model
-in `model/`, write the metrics and return the SSE list.
-
-### `write_metrics(scaled_data, model, best_k)`
-
-Write `model/metrics_TIME.json` with the run time, the row count, k, the inertia and the
-silhouette score, and return the same values. The silhouette score runs from -1 to 1; higher
-means better separated clusters. It is `None` when k is 1.
+Fit K-Means for k = 1 to 49, refit at the elbow k, save the model, write the metrics file and
+return the SSE list.
 
 ### `find_out_of_range(scaler, rows)`
 
-Return one tuple `(row index, column, value, low, high)` for every value that lies outside the
-range the scaler saw in training. An empty list means every value is inside.
+Return one tuple `(row index, column, value, low, high)` for every value outside the range the
+scaler saw in training. An empty list means every value is inside.
 
 ```python
 >>> import pandas as pd
 >>> from sklearn.preprocessing import MinMaxScaler
 >>> train = pd.DataFrame({"BALANCE": [0.0, 19043.0], "PURCHASES": [0.0, 49039.0], "CREDIT_LIMIT": [50.0, 30000.0]})
 >>> scaler = MinMaxScaler().fit(train)
->>> inside = pd.DataFrame({"BALANCE": [3202.47], "PURCHASES": [0.0], "CREDIT_LIMIT": [7000.0]})
->>> lab.find_out_of_range(scaler, inside)
-[]
 >>> outside = pd.DataFrame({"BALANCE": [3202.47], "PURCHASES": [124.5], "CREDIT_LIMIT": [241514.0]})
 >>> lab.find_out_of_range(scaler, outside)
 [(0, 'CREDIT_LIMIT', 241514.0, 50.0, 30000.0)]
@@ -223,30 +169,14 @@ range the scaler saw in training. An empty list means every value is inside.
 
 ### `load_model_elbow(filename, sse, scaler_filename="scaler.sav")`
 
-Load the saved model and return the cluster of the customer in `data/test.csv` as an `int`.
-Raise `ValueError` if the model does not have the elbow number of clusters, or if the customer
-is outside the training range. The customer is scaled with the saved scaler first.
-
-### `silhouette_or_none(scaled_data, labels)`
-
-Return the silhouette score of a labelling, or `None` when it is undefined. The score needs at
-least 2 different labels and fewer labels than rows.
-
-```python
->>> import numpy as np
->>> points = np.array([[0.0], [0.1], [1.0], [1.1]])
->>> round(lab.silhouette_or_none(points, [0, 0, 1, 1]), 4)
-0.8997
->>> lab.silhouette_or_none(points, [0, 0, 0, 0]) is None
-True
-```
+Scale the customer in `data/test.csv` with the saved scaler and return its cluster as an `int`.
+Raise `ValueError` if the saved model is not the elbow model, or if the customer is outside
+the training range.
 
 ### `compare_models(data_b64, sse)`
 
-Fit a Gaussian mixture (a model that gives each point a probability for every cluster) with the
-elbow k from `sse`, and compare it with K-Means on the same scaled data. Write
-`model/model_comparison_TIME.json` with both silhouette scores and the better model, and return
-the same values. K-Means stays the model that is saved and used.
+Fit a Gaussian mixture with the elbow k and compare it with K-Means by silhouette score. Write
+a comparison file and return the same values. K-Means stays the model that is used.
 
 ## Continuous Integration
 
@@ -259,9 +189,6 @@ the same values. K-Means stays the model that is saved and used.
 5. It runs the tests and writes an XML report.
 6. GitHub shows a green check if every step passed and a red cross if any step failed.
 
-The tests run on GitHub's machines, not on the developer's computer. If they pass there, the
-code works in a clean environment, not only on one laptop.
-
 ### Workflows
 
 | Workflow | File | Runs on | Command | Artifacts |
@@ -270,25 +197,14 @@ code works in a clean environment, not only on one laptop.
 
 ### Python version matrix
 
-The job is written once, and GitHub runs it once per version listed under
-`strategy.matrix.python-version`: currently **3.12** and **3.13**. Each job reads its version
-from `${{ matrix.python-version }}`. Python 3.13 is the version inside the Airflow image.
+The job is written once, and GitHub runs it once per version in `strategy.matrix.python-version`:
+**3.12** and **3.13**. Python 3.13 is the version inside the Airflow image. Versions are written
+in quotes, and `fail-fast: false` lets one version fail without cancelling the other.
 
-- Versions are written in quotes (`"3.12"`). YAML reads an unquoted `3.10` as the number 3.1,
-  which is a different version.
-- `fail-fast: false` is set, so one failing version does not cancel the other.
-- The workflow uses `actions/checkout`, `actions/setup-python` and `actions/upload-artifact`
-  at v7. Each one runs on Node 24, which was read from its `action.yml`.
-
-### Artifacts
-
-The workflow uploads its XML report (`pytest-report.xml`) for each version, named
-`test-results-<version>`. To download one, open a run on the **Actions** tab and scroll to
-**Artifacts**.
+The XML report of each version is uploaded as `test-results-<version>`. To download one, open a
+run on the **Actions** tab and scroll to **Artifacts**.
 
 ## Testing
-
-The tests need no Airflow and no Docker. Run them from the repository root:
 
 ```bash
 python3 -m venv .venv
@@ -301,29 +217,19 @@ pytest
 |---|---|---|
 | `tests/test_lab.py` | 26 | 0 |
 
-The tests cover these kinds of cases:
+The tests cover three kinds of cases:
 
-- **Normal cases:** a good table passes the check, the scaler is saved, and the saved model
-  has the elbow number of clusters.
+- **Normal cases:** a good table passes the check, the scaler is saved, the saved model has the
+  elbow number of clusters, and the metrics and comparison files are written.
 - **Error cases:** a missing column, a text column, too few rows, negative values, a curve
-  without an elbow, a saved model with the wrong number of clusters, and a test customer
-  outside the training range (including the lab's old row with a credit limit of 241514).
-- **Scaling:** the test customer is scaled with the training scaler before the model
-  predicts. The test checks the numbers the model receives.
-- **Float comparison:** a scaled maximum came out as 1.0000000000000002, so the test allows a
-  tolerance, not `==`.
-- **Real data:** the real `file.csv` passes the check, and the real `test.csv` is inside its
-  range.
-- **Model comparison:** the comparison file is written and JSON-safe, it uses the elbow k, it
-  names the better model by silhouette score, and the score is `None` when it is undefined.
+  without an elbow, a saved model with the wrong number of clusters, and a test customer outside
+  the training range.
+- **Scaling:** the test customer is scaled with the training scaler before the model predicts.
+  A scaled maximum came out as 1.0000000000000002, so the test allows a tolerance.
 
 To check that the tests can fail, they were run against six deliberately broken copies of
-`lab.py`, each undoing one change below. Five were caught at once. Not scaling the test row was
-missed at first, because the model still gave the right answer on the test data, so a test was
-added that checks the values the model receives. All six are caught now.
-
-The suite passed on Python 3.12 (a local environment) and on Python 3.13 (inside the
-`apache/airflow:3.3.2` image).
+`lab.py`. All six are caught. The suite passes on Python 3.12 and on Python 3.13 (inside the
+Airflow image).
 
 ## Changes From the Upstream Lab
 
@@ -331,109 +237,71 @@ Each change is its own commit.
 
 ### Fixed
 
-- **The saved model was the wrong model.** The lab fitted k from 1 to 49 and saved the last
-  model, k = 49, while its log said the best k was 8. It now picks the elbow, refits at that k
-  and saves that model. A later task stops the run if the two numbers differ. The saved file
-  had 49 clusters before and 8 after (loaded in the worker and counted)
+- **The saved model was the wrong model.** The lab saved the last model tried, k = 49, while its
+  log said the best k was 8. It now saves the model refitted at the elbow k
   ([`255a295`](https://github.com/1AlgoRythm/mlops-lab2/commit/255a295)).
-- **The test customer was not scaled.** The model learned from data scaled to 0 to 1, but the
-  lab predicted on the raw row, so the answer meant nothing. The scaler is now saved and used
-  on the test customer. The scaled credit limit was 8.0622, far outside 0 to 1
+- **The test customer was not scaled.** The model learned from data scaled to 0 to 1, but the lab
+  predicted on the raw row. The scaler is now saved and used
   ([`c3ab987`](https://github.com/1AlgoRythm/mlops-lab2/commit/c3ab987)).
-- **The test customer was outside the data.** Its credit limit, 241514, is above the largest
-  in the data (30000) and appears nowhere in it. Its balance matches customer C10002 exactly,
-  so `test.csv` now holds C10002's real values: balance 3202.467416, purchases 0 and credit
-  limit 7000. The scaled row is `[0.1682, 0.0, 0.2321]` and the predicted cluster is 2
+- **The test customer was outside the data.** Its credit limit, 241514, is far above the largest
+  in the data (30000). `test.csv` now holds customer C10002's real values
   ([`22963f5`](https://github.com/1AlgoRythm/mlops-lab2/commit/22963f5)).
-- **Rows were dropped for a column the model never reads.** `dropna()` ran over all 18
-  columns and removed 314 rows; 313 of them only lacked `MINIMUM_PAYMENTS`. It now looks at
-  the 3 model columns. The run has 8,950 rows before and 8,949 after, and the elbow stays at
-  8 ([`5947650`](https://github.com/1AlgoRythm/mlops-lab2/commit/5947650)).
+- **Rows were dropped for a column the model never reads.** `dropna()` removed 314 rows; it now
+  looks at the 3 model columns and removes 1
+  ([`5947650`](https://github.com/1AlgoRythm/mlops-lab2/commit/5947650)).
 
 ### Added
 
-- **An input check:** the new `validate_data_task`, and a range check on the test customer. With
-  temporary breaks, restored afterwards, the old test row failed with
-  `CREDIT_LIMIT=241514.0 (training range 50.0 to 30000.0)`. A renamed `BALANCE` column failed
-  with `Missing columns: ['BALANCE']`, and the three later tasks ended as `upstream_failed`
+- **An input check:** the new `validate_data_task`, and a range check on the test customer
   ([`eab5054`](https://github.com/1AlgoRythm/mlops-lab2/commit/eab5054)).
-- **A quality score and a metrics file for every run.** A run gives k = 8, inertia 42.207 and
-  silhouette 0.4015. The inertia equals the 8th SSE value of the original lab's run, 42.2074
+- **A metrics file for every run**, with k, inertia and silhouette score
   ([`c5b74e0`](https://github.com/1AlgoRythm/mlops-lab2/commit/c5b74e0)).
-- **Tests:** 22 tests and a `requirements.txt`
+- **A second model for comparison:** a Gaussian mixture, compared with K-Means by silhouette
+  score. On this data K-Means scores 0.4015 and the mixture scores -0.0179, so K-Means stays
+  the saved model
+  ([`89ff84e`](https://github.com/1AlgoRythm/mlops-lab2/commit/89ff84e)).
+- **Tests:** 22 tests and a `requirements.txt`, and 4 more with the model comparison
   ([`6d37f86`](https://github.com/1AlgoRythm/mlops-lab2/commit/6d37f86)).
-- **A daily schedule, retries and a time limit:** daily at 06:00 UTC, 2 retries one minute
-  apart, a 10-minute limit per task, one active run at a time, tags and a DAG description. With
-  a temporary break, a failing `load_model_task` ran 3 times (the first try and 2 retries),
-  while `validate_data_task` has no retries and ran once. The web page showed the next run as
-  2026-10-19 02:00 in a UTC-04:00 browser, which is 06:00 UTC
+- **A daily schedule, retries and a time limit:** daily at 06:00 UTC, 2 retries one minute apart,
+  and 10 minutes per task
   ([`b93d086`](https://github.com/1AlgoRythm/mlops-lab2/commit/b93d086)).
 - **A GitHub Actions workflow** that runs the tests on Python 3.12 and 3.13
   ([`36ade5f`](https://github.com/1AlgoRythm/mlops-lab2/commit/36ade5f)).
-- **A second model for comparison.** A new last task, `compare_models_task`, fits a Gaussian
-  mixture with the elbow k and compares it with K-Means by silhouette score. On this data
-  K-Means scores 0.4015 and the mixture scores -0.0179, so K-Means stays the saved model. A
-  comparison file is written for every run, and 4 more tests bring the total to 26
-  ([`89ff84e`](https://github.com/1AlgoRythm/mlops-lab2/commit/89ff84e)).
 
 ### Changed
 
-- **Owner and description.** The DAG shows the author as owner and a description of what it
-  does. The web page showed the new owner at once and the description about 30 seconds later
+- **Owner and description** of the DAG
   ([`5aa8c9a`](https://github.com/1AlgoRythm/mlops-lab2/commit/5aa8c9a)).
-- **The compose file** differs from Apache's 3.3.2 file by two lines. Airflow's example DAGs
-  are off ([`5988d69`](https://github.com/1AlgoRythm/mlops-lab2/commit/5988d69)), and the
-  packages the DAG needs are the default for `_PIP_ADDITIONAL_REQUIREMENTS`
-  ([`f58e836`](https://github.com/1AlgoRythm/mlops-lab2/commit/f58e836)). The message of
-  `f58e836` says a fresh clone needs no `.env`. That was wrong; see the next entry.
-- **A one-line `.env`.** Apache's compose file lists `.env` under `env_file`, so Docker
-  Compose stops with `env file .env not found` without it. This showed up when the README steps
-  were run on a fresh clone: both start commands failed at once. The file holds
-  `AIRFLOW_UID=50000`, the value the Airflow documentation gives for systems other than Linux,
-  and has no secret
+- **The compose file** differs from Apache's 3.3.2 file by two lines: the example DAGs are off
+  ([`5988d69`](https://github.com/1AlgoRythm/mlops-lab2/commit/5988d69)), and the packages the
+  DAG needs install by default
+  ([`f58e836`](https://github.com/1AlgoRythm/mlops-lab2/commit/f58e836)).
+- **A one-line `.env`.** Apache's compose file stops with `env file .env not found` without
+  one. This showed up when the README steps were run on a fresh clone
   ([`1442d00`](https://github.com/1AlgoRythm/mlops-lab2/commit/1442d00)).
 
 ## Known Limitations
 
-- **The DAG file is called `airflow.py`**, the same name as the Airflow package. It works
-  inside Airflow. If the `dags/` folder comes before Airflow on Python's path, the file hides
-  the package and the import fails. This happened in a one-off check.
+- **The DAG file is called `airflow.py`**, the same name as the Airflow package. It works inside
+  Airflow, but it hides the package if the `dags/` folder comes before Airflow on Python's path.
 - **The packages are not pinned.** The containers install the newest `pandas`, `scikit-learn`
-  and `kneed` at every start. The tested versions were pandas 3.0.5, scikit-learn 1.9.1,
-  kneed 0.8.6, numpy 2.5.3 and Python 3.13.
-- **`_PIP_ADDITIONAL_REQUIREMENTS` is meant for quick checks.** Apache's own comment in the
-  compose file says to build or extend the image for anything else. Every container installs
-  the packages again on each start.
+  and `kneed` at every start. The tested versions were pandas 3.0.5, scikit-learn 1.9.1 and
+  kneed 0.8.6.
 - **The login `airflow` / `airflow` is a demo login.** The Airflow documentation says this
-  compose setup gives no security guarantees for production.
-- **Compose prints a `FERNET_KEY` warning.** It is harmless here. A production setup needs a
-  real key.
-- **The data is the lab's own file, and its source is not stated.** The daily run reads the
-  same file every time, so it gives the same result every day. The schedule shows how
-  automation works; it does not retrain on new data.
-- **Tasks pass the whole table to the next task as a long text string.** This is the lab's
-  design. It works for 8,950 rows. A larger table needs files, not XCom.
-- **The test customer is part of the training data.** It checks that the pipeline works. It
-  does not measure how well the model predicts.
-- **The comparison is advisory.** The Gaussian mixture never replaces K-Means, and the
-  silhouette score is one measure of cluster quality. It does not say which model suits a
-  real use.
-- **GitHub Actions has not been run on this code at the time of writing.** The commands in the
-  workflow were run in a fresh environment and passed. Check the badge at the top.
+  compose setup is not for production.
+- **The test customer is part of the training data.** It checks that the pipeline works. It does
+  not measure how well the model predicts.
+- **The model comparison is advisory.** The Gaussian mixture never replaces K-Means.
+- **GitHub Actions has not been run on this code at the time of writing.** The workflow's
+  commands were run in a fresh environment and passed.
 
 ## Lessons Learned
 
 - A log line is not proof. The lab printed "optimal 8" while the saved model had 49 clusters.
-  Check the saved file.
 - A model must see new data the way it saw training data. Save the scaler with the model.
 - A pipeline should refuse bad input with a clear message, not answer with a guess.
-- A test that passes is only useful if it can fail. Breaking the code on purpose found a test
-  that would not have caught a missing scaling step.
-- Compare floats with a tolerance. A scaled maximum came out as 1.0000000000000002.
-- A different model is not automatically better. The Gaussian mixture scored -0.0179 against
-  0.4015 for K-Means on the same data.
-- Run the README on a fresh clone. A check that only resolves variables does not prove the
-  stack starts. The fresh clone showed that the compose file needs a `.env`.
+- A test that passes is only useful if it can fail.
+- Run the README on a fresh clone. It showed that the compose file needs a `.env`.
 
 ## Attribution and AI Use
 
