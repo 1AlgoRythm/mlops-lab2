@@ -238,47 +238,33 @@ Each change is its own commit.
 ### Fixed
 
 - **The saved model was the wrong model.** The lab saved the last model tried, k = 49, while its
-  log said the best k was 8. It now saves the model refitted at the elbow k
-  ([`255a295`](https://github.com/1AlgoRythm/mlops-lab2/commit/255a295)).
+  log said the best k was 8. It now saves the model refitted at the elbow k.
 - **The test customer was not scaled.** The model learned from data scaled to 0 to 1, but the lab
-  predicted on the raw row. The scaler is now saved and used
-  ([`c3ab987`](https://github.com/1AlgoRythm/mlops-lab2/commit/c3ab987)).
+  predicted on the raw row. The scaler is now saved and used.
 - **The test customer was outside the data.** Its credit limit, 241514, is far above the largest
-  in the data (30000). `test.csv` now holds customer C10002's real values
-  ([`22963f5`](https://github.com/1AlgoRythm/mlops-lab2/commit/22963f5)).
+  in the data (30000). `test.csv` now holds customer C10002's real values.
 - **Rows were dropped for a column the model never reads.** `dropna()` removed 314 rows; it now
-  looks at the 3 model columns and removes 1
-  ([`5947650`](https://github.com/1AlgoRythm/mlops-lab2/commit/5947650)).
+  looks at the 3 model columns and removes 1.
 
 ### Added
 
-- **An input check:** the new `validate_data_task`, and a range check on the test customer
-  ([`eab5054`](https://github.com/1AlgoRythm/mlops-lab2/commit/eab5054)).
-- **A metrics file for every run**, with k, inertia and silhouette score
-  ([`c5b74e0`](https://github.com/1AlgoRythm/mlops-lab2/commit/c5b74e0)).
+- **An input check:** the new `validate_data_task`, and a range check on the test customer.
+- **A metrics file for every run**, with k, inertia and silhouette score.
 - **A second model for comparison:** a Gaussian mixture, compared with K-Means by silhouette
   score. On this data K-Means scores 0.4015 and the mixture scores -0.0179, so K-Means stays
-  the saved model
-  ([`89ff84e`](https://github.com/1AlgoRythm/mlops-lab2/commit/89ff84e)).
-- **Tests:** 22 tests and a `requirements.txt`, and 4 more with the model comparison
-  ([`6d37f86`](https://github.com/1AlgoRythm/mlops-lab2/commit/6d37f86)).
+  the saved model.
+- **Tests:** 22 tests and a `requirements.txt`, and 4 more with the model comparison.
 - **A daily schedule, retries and a time limit:** daily at 06:00 UTC, 2 retries one minute apart,
-  and 10 minutes per task
-  ([`b93d086`](https://github.com/1AlgoRythm/mlops-lab2/commit/b93d086)).
-- **A GitHub Actions workflow** that runs the tests on Python 3.12 and 3.13
-  ([`36ade5f`](https://github.com/1AlgoRythm/mlops-lab2/commit/36ade5f)).
+  and 10 minutes per task.
+- **A GitHub Actions workflow** that runs the tests on Python 3.12 and 3.13.
 
 ### Changed
 
-- **Owner and description** of the DAG
-  ([`5aa8c9a`](https://github.com/1AlgoRythm/mlops-lab2/commit/5aa8c9a)).
-- **The compose file** differs from Apache's 3.3.2 file by two lines: the example DAGs are off
-  ([`5988d69`](https://github.com/1AlgoRythm/mlops-lab2/commit/5988d69)), and the packages the
-  DAG needs install by default
-  ([`f58e836`](https://github.com/1AlgoRythm/mlops-lab2/commit/f58e836)).
+- **Owner and description** of the DAG.
+- **The compose file** differs from Apache's 3.3.2 file by two lines: the example DAGs are off,
+  and the packages the DAG needs install by default.
 - **A one-line `.env`.** Apache's compose file stops with `env file .env not found` without
-  one. This showed up when the README steps were run on a fresh clone
-  ([`1442d00`](https://github.com/1AlgoRythm/mlops-lab2/commit/1442d00)).
+  one. This showed up when the README steps were run on a fresh clone.
 
 ## Known Limitations
 
