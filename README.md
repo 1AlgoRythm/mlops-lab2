@@ -277,8 +277,6 @@ Each change is its own commit.
 - **The test customer is part of the training data.** It checks that the pipeline works. It does
   not measure how well the model predicts.
 - **The model comparison is advisory.** The Gaussian mixture never replaces K-Means.
-- **GitHub Actions has not been run on this code at the time of writing.** The workflow's
-  commands were run in a fresh environment and passed.
 
 ## Lessons Learned
 
