@@ -22,7 +22,6 @@ this file.
 - [Changes From the Upstream Lab](#changes-from-the-upstream-lab)
 - [Known Limitations](#known-limitations)
 - [Lessons Learned](#lessons-learned)
-- [Attribution and AI Use](#attribution-and-ai-use)
 
 ## Overview
 
@@ -287,13 +286,6 @@ it does. Each change is one commit. "Observed" is what a real run or a check sho
 - Compare floats with a tolerance. A scaled maximum came out as 1.0000000000000002.
 - Run the README on a fresh clone. A check that only resolves variables does not prove the
   stack starts. The fresh clone showed that the compose file needs a `.env`.
-
-## Attribution and AI Use
-
-This repository is based on the lab in the course repository linked at the top. Claude (an AI
-assistant) wrote the changes, the tests, the workflow and this README at the author's request.
-It ran each change and checked the results. The commits from `5aa8c9a` onward carry a
-`Co-Authored-By` line.
 
 ---
 
